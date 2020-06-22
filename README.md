@@ -1,1 +1,2 @@
-# gows
+# GoWS
+Go webosocket practices
