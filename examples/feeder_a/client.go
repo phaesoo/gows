@@ -33,14 +33,15 @@ var upgrader = websocket.Upgrader{
 }
 
 type ohlcvDaily struct {
-	code      string    `json:code`
-	date      int       `json:date`
-	open      float64   `json:open`
-	high      float64   `json:high`
-	low       float64   `json:low`
-	close     float64   `json:close`
-	volume    float64   `json:volume`
-	updatedAt time.Time `json:updated_at`
+	ID        int       `json:"id"`
+	Code      string    `json:"code"`
+	Date      int       `json:"date"`
+	Open      float64   `json:"open"`
+	High      float64   `json:"high"`
+	Low       float64   `json:"low"`
+	Close     float64   `json:"close"`
+	Volume    float64   `json:"volume"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 type Client struct {
@@ -61,6 +62,7 @@ func (c *Client) watchDB() {
 	db, err := sql.Open("sqlite3", "./foo.db")
 	checkErr(err)
 	d := ohlcvDaily{}
+	latestID := 0
 
 	for {
 		select {
@@ -69,24 +71,28 @@ func (c *Client) watchDB() {
 			rows, err := db.Query(q)
 			checkErr(err)
 
-			latestID := 0
 			for rows.Next() {
-				err = rows.Scan(&d.ID, &d.code, &d.date, &d.open, &d.high, &d.low, &d.close, &d.volume, &d.updatedAt)
+
+				err = rows.Scan(&d.ID, &d.Code, &d.Date, &d.Open, &d.High, &d.Low, &d.Close, &d.Volume, &d.UpdatedAt)
 				checkErr(err)
 
 				//log.Printf("%t", rows)
 				//[]byte(fmt.Sprintf("%v", d))
 
+				log.Println(d)
+
 				b, err := json.Marshal(d)
-
-				log.Println("watch")
-				log.Println(b)
-
 				checkErr(err)
 
-				c.send <- b
+				log.Println("watch")
 
-				log.Println(c.send)
+				var temp ohlcvDaily
+
+				err = json.Unmarshal(b, &temp)
+				checkErr(err)
+				fmt.Printf("%+v\n", temp)
+
+				c.send <- b
 
 				latestID = d.ID
 			}
@@ -101,14 +107,14 @@ func (c *Client) sendMessage() {
 		c.conn.Close()
 	}()
 
+	d := ohlcvDaily{}
+
 	for {
 		select {
 		case message, _ := <-c.send:
-			var d ohlcvDaily
 			err := json.Unmarshal(message, &d)
 			checkErr(err)
-			log.Println("send")
-			fmt.Printf("%+v\n", d)
+			c.conn.WriteJSON(d)
 		}
 	}
 }
@@ -123,5 +129,5 @@ func serveWs(w http.ResponseWriter, r *http.Request) {
 	client := &Client{latestID: 0, conn: conn, send: make(chan []byte, 1024)}
 
 	go client.watchDB()
-	go client.sendMessage()
+	client.sendMessage()
 }
