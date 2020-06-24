@@ -50,6 +50,7 @@ type Client struct {
 	conn *websocket.Conn
 
 	send chan []byte
+	done chan int
 }
 
 func (c *Client) watchDB() {
@@ -57,9 +58,10 @@ func (c *Client) watchDB() {
 		c.conn.Close()
 	}()
 
-	ticker := time.NewTicker(2 * time.Second)
+	ticker := time.NewTicker(time.Microsecond)
 
 	db, err := sql.Open("sqlite3", "./foo.db")
+	defer db.Close()
 	checkErr(err)
 	d := ohlcvDaily{}
 	latestID := 0
@@ -72,32 +74,29 @@ func (c *Client) watchDB() {
 			checkErr(err)
 
 			for rows.Next() {
-
 				err = rows.Scan(&d.ID, &d.Code, &d.Date, &d.Open, &d.High, &d.Low, &d.Close, &d.Volume, &d.UpdatedAt)
 				checkErr(err)
 
-				//log.Printf("%t", rows)
-				//[]byte(fmt.Sprintf("%v", d))
-
-				log.Println(d)
-
 				b, err := json.Marshal(d)
 				checkErr(err)
-
-				log.Println("watch")
 
 				var temp ohlcvDaily
 
 				err = json.Unmarshal(b, &temp)
 				checkErr(err)
-				fmt.Printf("%+v\n", temp)
 
+				log.Println("start to send", len(c.send), cap(c.send), len(b))
 				c.send <- b
+				log.Println("end to send")
 
 				latestID = d.ID
 			}
+			rows.Close()
 
 			c.latestID = latestID
+		case <-c.done:
+			log.Println("Done!!!!!!!!!!!!!!!!!!!!!!!")
+			return
 		}
 	}
 }
@@ -112,9 +111,17 @@ func (c *Client) sendMessage() {
 	for {
 		select {
 		case message, _ := <-c.send:
+			log.Println("get message")
 			err := json.Unmarshal(message, &d)
 			checkErr(err)
-			c.conn.WriteJSON(d)
+			if err := c.conn.WriteJSON(d); err != nil {
+				log.Println("send finished")
+				c.done <- 1
+				close(c.send)
+				return
+			}
+			time.Sleep(time.Second * 1)
+			log.Println("write message")
 		}
 	}
 }
@@ -126,8 +133,10 @@ func serveWs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	client := &Client{latestID: 0, conn: conn, send: make(chan []byte, 1024)}
+	client := &Client{latestID: 0, conn: conn, send: make(chan []byte, 1024), done: make(chan int, 1)}
 
 	go client.watchDB()
-	client.sendMessage()
+	time.Sleep(time.Second * 3)
+
+	go client.sendMessage()
 }

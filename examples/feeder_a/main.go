@@ -75,6 +75,7 @@ func feedData() {
 			affect, err := res.RowsAffected()
 			checkErr(err)
 
+			stmp.Close()
 			log.Println(affect)
 		}
 	}
