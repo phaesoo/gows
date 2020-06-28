@@ -1,4 +1,4 @@
-# Feeder A
+# Feeder B
 
 ## How to run
 
