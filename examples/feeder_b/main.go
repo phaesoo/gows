@@ -15,7 +15,6 @@ import (
 var addr = flag.String("addr", ":5000", "http service address")
 
 func serveHome(w http.ResponseWriter, r *http.Request) {
-	log.Print(r.URL)
 	if r.URL.Path != "/" {
 		http.Error(w, "Not found", http.StatusNotFound)
 		return

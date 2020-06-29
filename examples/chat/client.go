@@ -44,7 +44,7 @@ func (c *Client) readPump() {
 	}()
 	c.conn.SetReadLimit(maxMessageSize)
 	c.conn.SetReadDeadline(time.Now().Add(pongWait))
-	c.conn.SetPongHandler(func(string) error { c.conn.SetReadDeadline(time.Now().Add(pongWait)); return nil })
+	c.conn.SetPongHandler(func(s string) error { log.Println(s); c.conn.SetReadDeadline(time.Now().Add(pongWait)); return nil })
 	for {
 		_, message, err := c.conn.ReadMessage()
 		if err != nil {
@@ -92,7 +92,7 @@ func (c *Client) writePump() {
 			}
 		case <-ticker.C:
 			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
-			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+			if err := c.conn.WriteMessage(websocket.PingMessage, []byte("hi")); err != nil {
 				return
 			}
 		}
@@ -110,5 +110,5 @@ func serveWs(hub *Hub, w http.ResponseWriter, r *http.Request) {
 	client.hub.register <- client
 
 	go client.writePump()
-	//go client.readPump()
+	go client.readPump()
 }
